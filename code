@@ -1,0 +1,158 @@
+import pandas as pd
+import numpy as np
+
+
+
+            #pandas are the python package that help us to handle and manipulate the data. it can read data from
+            #various formats,csv,excel,sql
+            #numpy is the open source python library which contain multidimensional arrays
+            #helps to perform arithmentic operation on arrays which cant be performed on list
+            #import numpy package to our current environment
+
+df=pd.read_csv("NSE-TATA.csv")
+df
+
+           #read the csv file present in our home directory else you can also specify its location direcltly
+           #store the data in a variable and we have named it df so now we can easily access our data by using df
+
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+
+           #to make graphs we are using matplotlib . we can also use plotly
+           #matplotlib is a visualization library which we used to graphically represent 2d arrays
+           #we can build graph,piechart,histogram and many more
+           #matplotlib inline is basically used to show our output plot just below(inline) out code not on a sepeerate window not needed here
+
+df["Date"]=pd.to_datetime(df.Date,format="%Y-%m-%d")
+df.index=df['Date']
+plt.figure(figsize=(16,4))
+plt.plot(df["Close"],label='Closing Price ')
+plt.legend(loc='best')
+plt.xlabel("YEAR")
+plt.ylabel("PRICE")
+plt.title("CLOSING PRICE GRAPH OVER YEARS")
+
+
+
+           #we are changing our date attribute to datetime dtype and naming this new attribute as date
+           # we will make this attribute as index
+           #now we are drawing a plot of close value vs date
+           #we have specified the size of figure of our plot as 16*4
+           #specify label , xlabel,ylabel,title , their position,color , fontsizde and various other attributes
+
+from sklearn.preprocessing import MinMaxScaler
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize']=20,6
+from keras.models import Sequential
+from keras.layers import LSTM,Dense
+from keras.layers import Dropout
+
+
+
+          #for normalizing our data we need min max scalar
+          #rcparams is required so that we can customize matplotlib , its properties, its default size and other factors(runtime configuration)
+          #we have defined the size of our matplotlib graph as 20*6
+          #import sequential from keras for implementation of neural networks . arranging keras layer in a sequential manner
+          #LSTM to implement LSTM
+          #dropout for preventing overfitting
+          #dense to add a densely connected neural network
+          #Sort the dataset on date time 
+
+data=df.sort_index(ascending=True,axis=0)
+new_dataset=pd.DataFrame(index=range(0,len(df)),columns=['Date','Close'])
+for i in range(0,len(data)):
+    new_dataset["Date"][i]=data['Date'][i]
+    new_dataset["Close"][i]=data["Close"][i]
+
+    
+            #sort the index(date) and store it as data /axis=0 sort on basus of index
+            #now from the complete dataset filter out date and close and name as new_dataset
+            #add values to this new_dataset from data(sorted) 
+            
+
+scaler=MinMaxScaler(feature_range=(0,1))
+new_dataset.index= new_dataset.Date
+new_dataset.drop("Date",axis=1,inplace=True)
+Final_dataset= new_dataset.values
+TRAIN_DATA=Final_dataset[0:987,:]
+
+VALID_DATA=Final_dataset[987:,:]
+
+
+               #TOTAL 1236 DATA SAMPLES (1-987->TRAIN_DATA) AND REST ->VALID _DATA(close values as final dataset only has close values)
+
+
+scaler=MinMaxScaler(feature_range=(0,1))
+SCALED_DATA=scaler.fit_transform(Final_dataset)
+x_TRAIN_DATA,y_TRAIN_DATA=[],[]
+for i in range(60,len(TRAIN_DATA)):
+    x_TRAIN_DATA.append(SCALED_DATA[i-60:i,0])
+    y_TRAIN_DATA.append(SCALED_DATA[i,0])
+
+x_TRAIN_DATA
+
+x_TRAIN_DATA,y_TRAIN_DATA=np.array(x_TRAIN_DATA),np.array(y_TRAIN_DATA)
+x_TRAIN_DATA=np.reshape(x_TRAIN_DATA,(x_TRAIN_DATA.shape[0],x_TRAIN_DATA.shape[1],1))
+
+
+
+            #We should input our data in the form of a 3D array to the LSTM model.
+            #First, we create data in 60 timesteps before using numpy to convert it into an array.
+            #Finally, we convert the data into a 3D array with X_train_data samples, 60 timestamps, and one feature at each step.
+
+            #define keras model
+
+model=Sequential()
+model.add(LSTM(units=50,return_sequences=True,input_shape=(x_TRAIN_DATA.shape[1],1)))
+model.add(LSTM(units=50))
+model.add(Dense(1))
+inputs_data= new_dataset[len( new_dataset)-len(VALID_DATA)-60:].values
+inputs_data=inputs_data.reshape(-1,1)
+inputs_data=scaler.transform(inputs_data)
+model.compile(loss='mean_squared_error',optimizer='adam')
+model.fit(x_TRAIN_DATA,y_TRAIN_DATA,epochs=1,batch_size=1,verbose=2)
+
+
+
+
+                      #The LSTM layer is added with the following arguments: 50 units is the dimensionality of the output space, 
+                      #return_sequences=True is necessary for stacking LSTM layers so the consequent LSTM layer has a three-dimensional 
+                      #sequence input, and input_shape is the shape of the training dataset.
+                      #, we add the Dense layer that specifies an output of one unit.
+                      #To compile our model we use the Adam optimizer and set the loss as the mean_squared_error.
+                      #After that, we fit the model to run for 1 epochs (the epochs are the number of times the learning algorithm will
+                      #work through the entire training set) with a batch size of 1.
+
+X_TEST=[]
+for i in range(60,inputs_data.shape[0]):
+    X_TEST.append(inputs_data[i-60:i,0])
+X_TEST=np.array(X_TEST)
+
+X_TEST=np.reshape(X_TEST,(X_TEST.shape[0],X_TEST.shape[1],1))
+predicted_closing_price=model.predict(X_TEST)
+predicted_closing_price=scaler.inverse_transform(predicted_closing_price)
+
+
+
+                       #now after building the keras model ,next step is to use this model to predict values (testing data)
+                       #append test data from input data with timestepp of 60
+                       # convert this test data into numpy array for computations 
+                       #now provide this test data as a 3d array to your keras LSTM model
+                       #using predict function predict the values wrt model andstore it as predicted_closing_price
+                       #now using inverse_transform scale back the data to its original presentation
+
+TRAIN_DATA= new_dataset[:987]
+VALID_DATA= new_dataset[987:]
+VALID_DATA['Predictions']=predicted_closing_price
+plt.plot(TRAIN_DATA["Close"])
+plt.plot(VALID_DATA[['Close']])
+plt.plot(VALID_DATA[['Predictions']],label='predicted closing price',color='red')
+plt.plot(df["Close"],label='Actual Closing Price ',color='blue')
+plt.legend(loc='best')
+plt.xlabel("YEAR",color='red',fontsize=15)
+plt.ylabel("PRICE",color='red',fontsize=15)
+
+plt.title("CLOSING PRICE GRAPH OVER YEARS",fontsize=20)
+
+
